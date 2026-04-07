@@ -21,6 +21,11 @@ const TWILIO_CONTENT_VARIABLES = process.env.TWILIO_CONTENT_VARIABLES || "";
 const TWILIO_TO_NUMBER = process.env.TWILIO_TO_NUMBER || "";
 const TWILIO_CHANNEL = process.env.TWILIO_CHANNEL || "sms";
 const WHATSAPP_PROVIDER = String(process.env.WHATSAPP_PROVIDER || "twilio").toLowerCase();
+const DB_HOST = process.env.DB_HOST || "localhost";
+const DB_PORT = Number(process.env.DB_PORT || 3306);
+const DB_USER = process.env.DB_USER || "root";
+const DB_PASSWORD = process.env.DB_PASSWORD || "";
+const DB_NAME = process.env.DB_NAME || "portal_cursos";
 const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || "";
 const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || "";
 const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || "";
@@ -31,9 +36,9 @@ const EMAIL_FALLBACK_PORT = Number(process.env.EMAIL_FALLBACK_PORT || 587);
 const EMAIL_FALLBACK_SECURE = String(process.env.EMAIL_FALLBACK_SECURE || "false").toLowerCase() === "true";
 const EMAIL_CONNECT_TIMEOUT = Number(process.env.EMAIL_CONNECT_TIMEOUT || 12000);
 const EMAIL_SOCKET_TIMEOUT = Number(process.env.EMAIL_SOCKET_TIMEOUT || 15000);
-const EMAIL_USER = process.env.EMAIL_USER || "d3bruyn@gmail.com";
-const EMAIL_PASS = process.env.EMAIL_PASS || "uwxghfrgzqdftqzf";
-const EMAIL_FROM = process.env.EMAIL_FROM || `\"Vix Cursos\" <${EMAIL_USER}>`;
+const EMAIL_USER = process.env.EMAIL_USER || "";
+const EMAIL_PASS = process.env.EMAIL_PASS || "";
+const EMAIL_FROM = process.env.EMAIL_FROM || (EMAIL_USER ? `\"Vix Cursos\" <${EMAIL_USER}>` : "\"Vix Cursos\" <no-reply@vixcursos.local>");
 
 const ADMIN_COOKIE_NAME = "porto_admin_token";
 const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || "porto-admin-secret-change-me";
@@ -128,19 +133,27 @@ app.use((req, res, next) => {
 });
 
 let baseUrl = "http://localhost:3000";
+let initialized = false;
 
 // Servir frontend
 app.use(express.static(path.join(__dirname, "public")));
 
 async function start() {
+    if (initialized) {
+        return;
+    }
+
+    initialized = true;
+
     // ======================================
     // MYSQL
     // ======================================
     const db = await mysql.createPool({
-        host: "localhost",
-        user: "root",
-        password: "",
-        database: "portal_cursos",
+        host: DB_HOST,
+        port: DB_PORT,
+        user: DB_USER,
+        password: DB_PASSWORD,
+        database: DB_NAME,
         waitForConnections: true,
         connectionLimit: 10
     });
@@ -1405,7 +1418,7 @@ async function start() {
                 const c = rows[0];
 
                 return res.json({
-                    reply: `📘 *${c.nome}*\n\n📍 Local: ${c.local}\n🏫 Modalidade: ${c.modalidade}\n👥 Vagas: ${c.vagas} — ${c.status}\n\n👉 *Pré-inscrição:* \nhttp://localhost:3000/pre_inscricao.html?id=${c.id}`
+                    reply: `📘 *${c.nome}*\n\n📍 Local: ${c.local}\n🏫 Modalidade: ${c.modalidade}\n👥 Vagas: ${c.vagas} — ${c.status}\n\n👉 *Pré-inscrição:* \n${baseUrl}/pre_inscricao.html?id=${c.id}`
                 });
             }
 
@@ -1423,7 +1436,7 @@ async function start() {
                     LEFT JOIN filtro_local fl ON fl.id = c.local_id
                 `);
 
-                const lista = rows.map(r => `📘 *${r.id} — ${r.nome}*\n📍 Local: ${r.local}\n👥 ${r.vagas} vagas — ${r.status}\n👉 Pré-inscrição: http://localhost:3000/pre_inscricao.html?id=${r.id}\n`).join("\n");
+                const lista = rows.map(r => `📘 *${r.id} — ${r.nome}*\n📍 Local: ${r.local}\n👥 ${r.vagas} vagas — ${r.status}\n👉 Pré-inscrição: ${baseUrl}/pre_inscricao.html?id=${r.id}\n`).join("\n");
                 return res.json({ reply: lista });
             }
 
@@ -1493,28 +1506,59 @@ async function start() {
         res.status(404).send("Arquivo não encontrado!");
     });
 
-    // ============================================================
-    // START SERVER
-    // ============================================================
-    const portaPreferida = Number(process.env.PORT) || 3000;
-    const portaLivre = await detect(portaPreferida);
-    baseUrl = process.env.PUBLIC_BASE_URL || `http://localhost:${portaLivre}`;
-
-    if (portaLivre !== portaPreferida) {
-        console.warn(`⚠️ Porta ${portaPreferida} ocupada. Subindo na porta ${portaLivre}.`);
-    }
-
-    const server = app.listen(portaLivre, () => {
-        console.log(` Servidor rodando em http://localhost:${portaLivre}`);
-    });
-
-    server.on("error", (err) => {
-        console.error("Erro ao iniciar servidor HTTP:", err);
-        process.exit(1);
-    });
 }
 
-start().catch((err) => {
-    console.error("Falha ao iniciar aplicação:", err);
-    process.exit(1);
-});
+function resolverBaseUrl(req) {
+    if (process.env.PUBLIC_BASE_URL) {
+        return process.env.PUBLIC_BASE_URL;
+    }
+
+    const protoHeader = req.headers["x-forwarded-proto"];
+    const host = req.headers.host;
+    const proto = Array.isArray(protoHeader) ? protoHeader[0] : (protoHeader || "https");
+
+    if (host) {
+        return `${proto}://${host}`;
+    }
+
+    return baseUrl;
+}
+
+async function vercelHandler(req, res) {
+    try {
+        baseUrl = resolverBaseUrl(req);
+        await start();
+        return app(req, res);
+    } catch (err) {
+        console.error("Falha ao iniciar aplicação:", err);
+        return res.status(500).json({ error: "Erro ao iniciar aplicacao" });
+    }
+}
+
+module.exports = vercelHandler;
+
+if (!process.env.VERCEL) {
+    start()
+        .then(async () => {
+            const portaPreferida = Number(process.env.PORT) || 3000;
+            const portaLivre = await detect(portaPreferida);
+            baseUrl = process.env.PUBLIC_BASE_URL || `http://localhost:${portaLivre}`;
+
+            if (portaLivre !== portaPreferida) {
+                console.warn(`⚠️ Porta ${portaPreferida} ocupada. Subindo na porta ${portaLivre}.`);
+            }
+
+            const server = app.listen(portaLivre, () => {
+                console.log(` Servidor rodando em http://localhost:${portaLivre}`);
+            });
+
+            server.on("error", (err) => {
+                console.error("Erro ao iniciar servidor HTTP:", err);
+                process.exit(1);
+            });
+        })
+        .catch((err) => {
+            console.error("Falha ao iniciar aplicação:", err);
+            process.exit(1);
+        });
+}
