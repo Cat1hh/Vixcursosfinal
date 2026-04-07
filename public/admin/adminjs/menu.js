@@ -24,7 +24,7 @@
         const tipos = ["curso", "idade", "local", "modalidade"];
         for (const tipo of tipos) {
             try {
-                const req = await fetch(`/public/${tipo}`);
+                const req = await fetch(`/api/public/${tipo}`);
                 const dados = await req.json();
                 
                 if (tipo === "idade") {
@@ -50,7 +50,7 @@
 
     async function carregarCursosAdmin() {
         try {
-            const res = await fetch("/cursos");
+            const res = await fetch("/api/cursos");
             const cursos = await res.json();
             const tbody = document.getElementById("listaCursos");
             
@@ -113,7 +113,7 @@
             horario_termino: document.getElementById("horario_termino").value
         };
 
-        fetch("/cursos", {
+        fetch("/api/cursos", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(dados)
@@ -138,7 +138,7 @@
         if (!confirm(`Tem certeza que deseja esgotar as vagas do curso de ${nome}?`)) return;
 
         try {
-            const res = await fetch(`/cursos/esgotar/${id}`, { method: 'PUT' });
+            const res = await fetch(`/api/cursos/esgotar/${id}`, { method: 'PUT' });
             if (res.ok) {
                 carregarCursosAdmin(); 
             } else {

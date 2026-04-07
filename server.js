@@ -705,7 +705,7 @@ async function start() {
     // ============================================================
     // FILTROS
     // ============================================================
-    app.get("/public/:tipo", async (req, res) => {
+    app.get(["/public/:tipo", "/api/public/:tipo"], async (req, res) => {
         try {
             const tabela = tabelas[req.params.tipo];
             if (!tabela) return res.status(400).json({ error: "Filtro inválido" });
@@ -765,7 +765,7 @@ async function start() {
         }
     });
 
-    app.get("/cursos", exigirAuthAdmin, async (req, res) => {
+    app.get(["/cursos", "/api/cursos"], exigirAuthAdmin, async (req, res) => {
         try {
             const { id } = req.query;
 
@@ -807,7 +807,7 @@ async function start() {
     // ============================================================
     // CRIAR CURSO COM DISPARO AUTOMÁTICO VIA GMAIL (CORRIGIDO E BLINDADO)
     // ============================================================
-    app.post("/cursos", exigirAuthAdmin, async (req, res) => {
+    app.post(["/cursos", "/api/cursos"], exigirAuthAdmin, async (req, res) => {
         try {
             const { 
                 curso, vagas, idade_min, idade_max, local, modalidade, 
@@ -874,7 +874,7 @@ async function start() {
     // ============================================================
     // ESGOTAR CURSO
     // ============================================================
-    app.put("/cursos/esgotar/:id", exigirAuthAdmin, async (req, res) => {
+    app.put(["/cursos/esgotar/:id", "/api/cursos/esgotar/:id"], exigirAuthAdmin, async (req, res) => {
         try {
             await db.query(`UPDATE cursos SET status = 'esgotado' WHERE id = ?`, [req.params.id]);
             res.json({ status: "curso esgotado" });
@@ -887,7 +887,7 @@ async function start() {
     // ============================================================
     // INSCRIÇÃO
     // ============================================================
-    app.post("/inscricao", async (req, res) => {
+    app.post(["/inscricao", "/api/inscricao"], async (req, res) => {
         try {
             const {
                 nome,
@@ -1111,7 +1111,7 @@ async function start() {
     // ============================================================
     // LISTAR INSCRITOS DE UM CURSO ESPECÍFICO (Atualizado)
     // ============================================================
-    app.get("/inscritos/:idCurso", exigirAuthAdmin, async (req, res) => {
+    app.get(["/inscritos/:idCurso", "/api/inscritos/:idCurso"], exigirAuthAdmin, async (req, res) => {
         try {
             const { idCurso } = req.params;
             const [rows] = await db.query(`
@@ -1372,7 +1372,7 @@ async function start() {
     // ============================================================
     // DELETAR CURSO (CASCADE apaga inscrições automaticamente)
     // ============================================================
-    app.delete("/cursos/:id", exigirAuthAdmin, async (req, res) => {
+    app.delete(["/cursos/:id", "/api/cursos/:id"], exigirAuthAdmin, async (req, res) => {
         try {
             const { id } = req.params;
             const [[curso]] = await db.query(`SELECT id FROM cursos WHERE id = ?`, [id]);
@@ -1388,7 +1388,7 @@ async function start() {
     // ============================================================
     // CHATBOT
     // ============================================================
-    app.post("/chat", async (req, res) => {
+    app.post(["/chat", "/api/chat"], async (req, res) => {
         try {
             let text = (req.body.message || "")
                 .toString().trim().toLowerCase()
@@ -1469,7 +1469,7 @@ async function start() {
     // ============================================================
     // CURSOS DETALHES
     // ============================================================
-    app.get("/cursos-detalhes/:id", async (req, res) => {
+    app.get(["/cursos-detalhes/:id", "/api/cursos-detalhes/:id"], async (req, res) => {
         try {
             const { id } = req.params;
             const [rows] = await db.query(`

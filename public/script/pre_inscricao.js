@@ -647,7 +647,7 @@ document.addEventListener("DOMContentLoaded", () => {
         addMensagemBot("Processando sua pré-inscrição junto à Prefeitura... ⏳");
 
         try {
-            const res = await fetch('/inscricao', {
+            const res = await fetch('/api/inscricao', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(respostasUsuario)

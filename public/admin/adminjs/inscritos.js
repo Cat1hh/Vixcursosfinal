@@ -55,7 +55,7 @@ function formatarDataBr(dataIso) {
 ========================================================= */
 async function carregarCursos() {
     try {
-        const res = await fetch('/cursos'); 
+        const res = await fetch('/api/cursos'); 
         cursosGlobais = await res.json();
 
         const tbody = document.getElementById('tabelaCursosBody');
@@ -108,7 +108,7 @@ async function abrirListaAlunos(idCurso) {
     document.getElementById('telaAlunos').classList.remove('tela-oculta');
 
     try {
-        const res = await fetch(`/inscritos/${idCurso}`);
+        const res = await fetch(`/api/inscritos/${idCurso}`);
         alunosGlobais = await res.json(); // Salva os alunos na memória para a ficha
         if (btnPdf) btnPdf.style.display = 'inline-flex';
 
