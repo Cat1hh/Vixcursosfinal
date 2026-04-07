@@ -134,6 +134,7 @@ app.use((req, res, next) => {
 
 let baseUrl = "http://localhost:3000";
 let initialized = false;
+let startPromise = null;
 
 // Servir frontend
 app.use(express.static(path.join(__dirname, "public")));
@@ -143,7 +144,30 @@ async function start() {
         return;
     }
 
-    initialized = true;
+    if (startPromise) {
+        return startPromise;
+    }
+
+    startPromise = (async () => {
+    if (process.env.VERCEL) {
+        const faltando = [];
+
+        if (!process.env.DB_HOST || DB_HOST === "localhost" || DB_HOST === "127.0.0.1") {
+            faltando.push("DB_HOST");
+        }
+        if (!process.env.DB_USER) {
+            faltando.push("DB_USER");
+        }
+        if (!process.env.DB_NAME) {
+            faltando.push("DB_NAME");
+        }
+
+        if (faltando.length) {
+            const erro = new Error(`Banco de dados nao configurado na Vercel. Defina: ${faltando.join(", ")}`);
+            erro.code = "DB_CONFIG_MISSING";
+            throw erro;
+        }
+    }
 
     // ======================================
     // MYSQL
@@ -1506,6 +1530,17 @@ async function start() {
         res.status(404).send("Arquivo não encontrado!");
     });
 
+    initialized = true;
+    })();
+
+    try {
+        await startPromise;
+    } catch (err) {
+        startPromise = null;
+        initialized = false;
+        throw err;
+    }
+
 }
 
 function resolverBaseUrl(req) {
@@ -1531,6 +1566,10 @@ async function vercelHandler(req, res) {
         return app(req, res);
     } catch (err) {
         console.error("Falha ao iniciar aplicação:", err);
+        if (err && err.code === "DB_CONFIG_MISSING") {
+            return res.status(503).json({ error: err.message });
+        }
+
         return res.status(500).json({ error: "Erro ao iniciar aplicacao" });
     }
 }
