@@ -21,6 +21,43 @@ const TWILIO_CONTENT_VARIABLES = process.env.TWILIO_CONTENT_VARIABLES || "";
 const TWILIO_TO_NUMBER = process.env.TWILIO_TO_NUMBER || "";
 const TWILIO_CHANNEL = process.env.TWILIO_CHANNEL || "sms";
 const WHATSAPP_PROVIDER = String(process.env.WHATSAPP_PROVIDER || "twilio").toLowerCase();
+const DATABASE_URL = process.env.DATABASE_URL || "";
+
+function parseMySqlDatabaseUrl(connectionString) {
+    if (!connectionString) return null;
+
+    let parsed;
+    try {
+        parsed = new URL(connectionString);
+    } catch {
+        return null;
+    }
+
+    const protocol = String(parsed.protocol || "").toLowerCase();
+
+    if (protocol.startsWith("postgres")) {
+        const err = new Error(
+            "DATABASE_URL aponta para Postgres/Neon, mas este projeto usa MySQL (mysql2). Use um banco MySQL ou migre o backend para Postgres."
+        );
+        err.code = "DB_ENGINE_MISMATCH";
+        throw err;
+    }
+
+    if (!protocol.startsWith("mysql")) {
+        return null;
+    }
+
+    const dbName = (parsed.pathname || "").replace(/^\//, "");
+    return {
+        host: parsed.hostname || "localhost",
+        port: Number(parsed.port || 3306),
+        user: decodeURIComponent(parsed.username || "root"),
+        password: decodeURIComponent(parsed.password || ""),
+        database: dbName || "portal_cursos"
+    };
+}
+
+const databaseUrlConfig = parseMySqlDatabaseUrl(DATABASE_URL);
 const DB_HOST = process.env.DB_HOST || "localhost";
 const DB_PORT = Number(process.env.DB_PORT || 3306);
 const DB_USER = process.env.DB_USER || "root";
@@ -152,13 +189,15 @@ async function start() {
     if (process.env.VERCEL) {
         const faltando = [];
 
-        if (!process.env.DB_HOST || DB_HOST === "localhost" || DB_HOST === "127.0.0.1") {
+        const semDatabaseUrl = !DATABASE_URL;
+
+        if (semDatabaseUrl && (!process.env.DB_HOST || DB_HOST === "localhost" || DB_HOST === "127.0.0.1")) {
             faltando.push("DB_HOST");
         }
-        if (!process.env.DB_USER) {
+        if (semDatabaseUrl && !process.env.DB_USER) {
             faltando.push("DB_USER");
         }
-        if (!process.env.DB_NAME) {
+        if (semDatabaseUrl && !process.env.DB_NAME) {
             faltando.push("DB_NAME");
         }
 
@@ -173,11 +212,11 @@ async function start() {
     // MYSQL
     // ======================================
     const db = await mysql.createPool({
-        host: DB_HOST,
-        port: DB_PORT,
-        user: DB_USER,
-        password: DB_PASSWORD,
-        database: DB_NAME,
+        host: databaseUrlConfig?.host || DB_HOST,
+        port: databaseUrlConfig?.port || DB_PORT,
+        user: databaseUrlConfig?.user || DB_USER,
+        password: databaseUrlConfig?.password || DB_PASSWORD,
+        database: databaseUrlConfig?.database || DB_NAME,
         waitForConnections: true,
         connectionLimit: 10
     });
@@ -1566,6 +1605,9 @@ async function vercelHandler(req, res) {
         return app(req, res);
     } catch (err) {
         console.error("Falha ao iniciar aplicação:", err);
+        if (err && err.code === "DB_ENGINE_MISMATCH") {
+            return res.status(503).json({ error: err.message });
+        }
         if (err && err.code === "DB_CONFIG_MISSING") {
             return res.status(503).json({ error: err.message });
         }
